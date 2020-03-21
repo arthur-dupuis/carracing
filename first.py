@@ -9,71 +9,108 @@
 import gym
 from gym.envs.box2d import CarRacing
 import numpy as np
-di = []
 
-def find_diff_pixels(arr):
-    for i in range(len(arr)):
-        for j in range(len(arr[i])):
-            if (not_in_arr(arr[i][j])):
-                di.append([arr[i][j][0], arr[i][j][1], arr[i][j][2]])
-
-def not_in_arr(el):
-    print(di)
-    print(len(di))
-    for i in range(len(di)):
-        if (el[0] == di[i][0] and el[1] == di[i][1] and el[2] == di[i][2]):
-            return False
-    return True
-
-def transform_obs(obs):
-    dat = np.zeros((len(obs), len(obs[0])))
-    for i in range(len(obs)):
-        for j in range(len(obs[0])):
-            if (obs[i][j][1] > obs[i][j][0] and obs[i][j][1] > obs[i][j][2]):
-                dat[i][j] = -1
-            else :
-                dat[i][j] = 1
-    return dat
+import sys
+import numpy
+numpy.set_printoptions(threshold=sys.maxsize)
 
 
-def next_action(observation):
-    road_data = transform_obs(observation)
-    l = 0
-    r = 0
-    for i in range(len(road_data[66])):
-        if (i<48):
-            l += road_data[66][i]
-        else:
-            r += road_data[66][i]
-    if l>r :
-        return 'left'
-    else :
-        return 'right'
+import math
+import random
+import matplotlib
+import matplotlib.pyplot as plt
+from collections import namedtuple
+from itertools import count
+from PIL import Image
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import torchvision.transforms as T
+
+
+from DQN import DQN
+from memory import ReplayMemory
+from treat_screen import transform_obs
+from not_ML import next_action
 
 env = gym.make('CarRacing-v0')
+actions = [[0 , 0.3, 0], [-1 , 0.3, 0], [1 , 0.3, 0]]
+nb_actions = len(actions)
 
-for i_episode in range(1):
+################ Parameters to change ###############
+nb_episodes = 1
+size_episode = 50
+size_memory = 1000
+#####################################################
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward'))
+
+########################################################################
+############################  LOOP #####################################
+########################################################################
+
+for i_episode in range(nb_episodes):
     observation = env.reset()
-
-    for t in range(1000):
+    reward_tot = 0
+    for t in range(size_episode):
         env.render()
         # action = env.action_space.sample()      # Take a random action
-        action_s = [0 , 0.3, 0.1]
-        action_l = [-1 , 0.2, 0.1]
-        action_r = [1 , 0.2, 0.1]
         if (next_action(observation) =='left'):
-            action = action_l
+            action = actions[1]
         else:
-            action = action_r
+            action = actions[2]
         observation, reward, done, info = env.step(action)
         # print('aaaa')
         # find_diff_pixels(observation)
-
+        # reward_tot += reward
+        # if (t%10==0):
+        #     print(reward, reward_tot)
         if done:
             print("Episode finished after {} timesteps".format(t+1))
             break
 
-print(observation[0][48])
-print(observation[66][48])
+########################################################################
+############################ END LOOP ##################################
+########################################################################
+
+# resize = T.Compose([T.ToPILImage(),
+#                     T.Resize(40, interpolation=Image.CUBIC),
+#                     T.ToTensor()])
+
+BATCH_SIZE = 128
+GAMMA = 0.999
+EPS_START = 0.9
+EPS_END = 0.05
+EPS_DECAY = 200
+TARGET_UPDATE = 10
+
+
+simple_screen = transform_obs(observation[:84])
+torch_screen = torch.from_numpy(simple_screen)
+screen_height, screen_width = torch_screen.shape
+# aze = resize(torch_screen).unsqueeze(0).to(device)
+print(env.render(mode='rgb_array').transpose((2, 0, 1)).shape)
+torch_screen = torch_screen.unsqueeze(0)
+torch_screen = torch_screen.unsqueeze(0)
+
 env.close()
+
+policy_net = DQN(screen_height, screen_width, nb_actions).to(device)
+target_net = DQN(screen_height, screen_width, nb_actions).to(device)
+target_net.load_state_dict(policy_net.state_dict())
+target_net.eval()
+
+optimizer = optim.RMSprop(policy_net.parameters())
+memory = ReplayMemory(size_memory)
+
+
+print(random.random())
+
+print(policy_net(torch_screen))
+
