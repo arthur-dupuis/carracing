@@ -1,4 +1,10 @@
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import torchvision.transforms as T
+
 
 def transform_obs(obs):
     dat = np.zeros((len(obs), len(obs[0])), dtype=int)
@@ -8,4 +14,8 @@ def transform_obs(obs):
                 dat[i][j] = int(0)
             else :
                 dat[i][j] = int(1)
-    return dat
+    simple_screen = dat[:84]
+    torch_screen = torch.from_numpy(simple_screen)
+    torch_screen = torch_screen.unsqueeze(0)
+    torch_screen = torch_screen.unsqueeze(0).float()
+    return torch_screen
