@@ -41,8 +41,8 @@ actions = [[0 , 0.3, 0], [-1 , 0.3, 0], [1 , 0.3, 0]]
 nb_actions = len(actions)
 
 ################ Parameters to change ###############
-nb_episodes = 50
-size_episode = 100
+nb_episodes = 3
+size_episode = 300
 size_memory = 1000
 ##########################################################
 
@@ -63,12 +63,10 @@ Transition = namedtuple('Transition',
 ##########################################################
 
 ################## Declare networks ######################
-observation = env.reset()
-
-
 screen_height, screen_width = 84, 96
 
 policy_net = DQN(screen_height, screen_width, nb_actions).to(device)
+policy_net.load_state_dict(torch.load('./project/carracing/models/model'))
 target_net = DQN(screen_height, screen_width, nb_actions).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
@@ -77,7 +75,7 @@ optimizer = optim.RMSprop(policy_net.parameters())
 memory = ReplayMemory(size_memory)
 ##########################################################
 
-################### Select State #########################
+################### Select Action #########################
 def select_action(state):
     global steps_done
     sample = random.random() # Between 0 and 1
@@ -99,14 +97,12 @@ def select_action(state):
 ########################################################################
 def optimize_model():
     if len(memory) < BATCH_SIZE:
-        print('hey')
         return
     transitions = memory.sample(BATCH_SIZE)
     # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
     # detailed explanation). This converts batch-array of Transitions
     # to Transition of batch-arrays.
     batch = Transition(*zip(*transitions))
-    print(batch.action)
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
@@ -155,15 +151,16 @@ steps_done = 0
 ########################################################################
 
 for i_episode in range(nb_episodes):    # Initialize the environment and state
+    print(i_episode)
     observation = env.reset()
     last_screen = transform_obs(observation)
     current_screen = transform_obs(observation)
     state = current_screen
     tot_reward = 0
     for t in range(size_episode):
+        env.render()
         # Select and perform an action
         action_index = select_action(state).item()
-        print(action_index)
         action = actions[action_index]
         observation, reward, done, info = env.step(action)
         reward = torch.tensor([reward], device=device)
@@ -192,26 +189,9 @@ for i_episode in range(nb_episodes):    # Initialize the environment and state
     # Update the target network, copying all weights and biases in DQN
     if i_episode % TARGET_UPDATE == 0:
         target_net.load_state_dict(policy_net.state_dict())
+    torch.save(policy_net.state_dict(), './project/carracing/models/model')
     print(tot_reward)
 
-    # observation = env.reset()
-    # reward_tot = 0
-    # for t in range(size_episode):
-    #     env.render()
-    #     # action = env.action_space.sample()      # Take a random action
-    #     if (next_action(observation) =='left'):
-    #         action = actions[1]
-    #     else:
-    #         action = actions[2]
-    #     observation, reward, done, info = env.step(action)
-    #     # print('aaaa')
-    #     # find_diff_pixels(observation)
-    #     # reward_tot += reward
-    #     # if (t%10==0):
-    #     #     print(reward, reward_tot)
-    #     if done:
-    #         print("Episode finished after {} timesteps".format(t+1))
-    #         break
 
 ########################################################################
 ############################ END LOOP ##################################
